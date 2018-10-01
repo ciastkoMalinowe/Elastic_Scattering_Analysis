@@ -1,6 +1,4 @@
-package cuts
-
-class CutParameters(a: Double, b: Double, c: Double, si: Double)
+case class CutParameters(a: Double, b: Double, c: Double, si: Double)
 case class Cut(cqa: Double, cqb: Double, params: CutParameters)
 
 // cut structure:

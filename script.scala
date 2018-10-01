@@ -118,9 +118,7 @@ import org.apache.spark.rdd.RDD
 
 //-----------------
 // kinematics - reconstruction
-//-----------------
-
-import kinematics
+//-----------------_
 
 val withKinematics = distilled.withColumn("kinematics",doReconstruction($"L_2_N.x", $"L_2_N.y", $"L_2_F.x", $"L_2_F.y", $"R_2_N.x", $"R_2_N.y", $"R_2_F.x", $"R_2_F.y"))
 //withKinematics.printSchema()
@@ -130,8 +128,6 @@ withKinematics.head(10)
 //----------------
 // cut evaluation (only cuts 1, 2 and 7)
 //----------------
-
-import cuts
 
 val withCuts = withKinematics
   .withColumn("cut1", createCut($"kinematics.right.th_x", $"kinematics.left.th_x", lit(- cut(1).a), lit(1.0), lit(cut(1).c), lit(cut(1).si)))

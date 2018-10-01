@@ -1,5 +1,3 @@
-package environment
-
 case class UnitOptics(v_x: Double, L_x: Double, v_y: Double, L_y: Double)
 case class Optics(L_2_F: UnitOptics, L_2_N: UnitOptics, L_1_F: UnitOptics, R_1_F: UnitOptics, R_2_N: UnitOptics, R_2_F: UnitOptics)
 

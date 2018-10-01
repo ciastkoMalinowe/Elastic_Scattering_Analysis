@@ -1,7 +1,3 @@
-package kinematics
-
-import environment
-
 case class ArmReconstruction(th_x: Double, th_y: Double, vtx_x: Double, vtx_y: Double)
 case class ThetaReconstruction(th: Double, phi: Double)
 case class TReconstruction(x: Double, y: Double, t: Double)
