@@ -70,8 +70,8 @@ val timestamp_bins = timestamp_max.toInt - timestamp_min.toInt +1
 //histogrammar bokeh one histo
 //---------------------------------------
 
-//import org.dianahep.histogrammar._
-//import org.dianahep.histogrammar.bokeh._
+import org.dianahep.histogrammar._
+import org.dianahep.histogrammar.bokeh._
 import org.apache.spark.rdd.RDD
 
 
@@ -122,39 +122,43 @@ import org.apache.spark.rdd.RDD
 
 val withKinematics = distilled.withColumn("kinematics",doReconstruction($"L_2_N.x", $"L_2_N.y", $"L_2_F.x", $"L_2_F.y", $"R_2_N.x", $"R_2_N.y", $"R_2_F.x", $"R_2_F.y"))
 //withKinematics.printSchema()
-withKinematics.head(10)
+//withKinematics.count()
+//withKinematics.head(10)
 
 
 //----------------
 // cut evaluation (only cuts 1, 2 and 7)
 //----------------
 
-val withCuts = withKinematics
-  .withColumn("cut1", createCut($"kinematics.right.th_x", $"kinematics.left.th_x", lit(- cut(1).a), lit(1.0), lit(cut(1).c), lit(cut(1).si)))
-  .withColumn("cut2", createCut($"kinematics.right.th_x", $"kinematics.left.th_x", lit(- cut(2).a), lit(1.0), lit(cut(2).c), lit(cut(2).si)))
-  .withColumn("cut7", createCut($"kinematics.right.th_x", $"kinematics.right.vtx_x" - $"kinematics.left.vtx_y", lit(- cut(7).a), lit(1.0), lit(cut(7).c), lit(cut(7).si)))
+val withCuts = withKinematics.withColumn("cut1", createCut($"kinematics.right.th_x", $"kinematics.left.th_x", lit(- cut(1).a), lit(1.0), lit(cut(1).c), lit(cut(1).si))).withColumn("cut2", createCut($"kinematics.right.th_x", $"kinematics.left.th_x", lit(- cut(2).a), lit(1.0), lit(cut(2).c), lit(cut(2).si))).withColumn("cut7", createCut($"kinematics.right.th_x", $"kinematics.right.vtx_x" - $"kinematics.left.vtx_y", lit(- cut(7).a), lit(1.0), lit(cut(7).c), lit(cut(7).si)))
 
-val withCutEvaluated = withCuts
-  .filter(evaluateCut($"cut1.params.a", $"cut1.cqa", $"cut1.params.b", $"cut1.cqb", $"cut1.params.c", $"cut1.params.si"))
-  .filter(evaluateCut($"cut2.params.a", $"cut2.cqa", $"cut2.params.b", $"cut2.cqb", $"cut2.params.c", $"cut2.params.si"))
-  .filter(evaluateCut($"cut7.params.a", $"cut7.cqa", $"cut7.params.b", $"cut7.cqb", $"cut7.params.c", $"cut7.params.si"))
+// filtered withCutEvaluated results in a state when 2 loops are required to produce  rate_cmp histo, 
+// if all histograms are defined over one rdd only one is triggered to evaluate them, (filter condidtion might be additional param in Histogram constructor)
+//val withCutEvaluated = withCuts.filter(evaluateCut($"cut1.params.a", $"cut1.cqa", $"cut1.params.b", $"cut1.cqb", $"cut1.params.c", $"cut1.params.si")).filter(evaluateCut($"cut2.params.a", $"cut2.cqa", $"cut2.params.b", $"cut2.cqb", $"cut2.params.c", $"cut2.params.si")).filter(evaluateCut($"cut7.params.a", $"cut7.cqa", $"cut7.params.b", $"cut7.cqb", $"cut7.params.c", $"cut7.params.si"))
 
-//print(withCutEvaluated.count())
+val withCutEvaluated = withCuts.withColumn("cutsEvaluated", evaluateCut($"cut1.params.a", $"cut1.cqa", $"cut1.params.b", $"cut1.cqb", $"cut1.params.c", $"cut1.params.si") && evaluateCut($"cut2.params.a", $"cut2.cqa", $"cut2.params.b", $"cut2.cqb", $"cut2.params.c", $"cut2.params.si") && evaluateCut($"cut7.params.a", $"cut7.cqa", $"cut7.params.b", $"cut7.cqb", $"cut7.params.c", $"cut7.params.si"))
+
+//withCutEvaluated.select($"timestamp").head(10)
 
 //---------------------
 //- histograms
 //---------------------
 
-//import io.continuum.bokeh._
+import io.continuum.bokeh._
 
-//val timestamp: RDD[Long] = distilled.select($"timestamp").rdd.map { case x : Row => x(0).asInstanceOf[Long] }
+case class TimestampWithFilter(timestamp: Long, cutsEvaluated: Boolean)
+
+val timestamp: RDD[TimestampWithFilter] = withCutEvaluated.select($"timestamp", $"cutsEvaluated").rdd.map { case x : Row => TimestampWithFilter(x(0).asInstanceOf[Long], x(1).asInstanceOf[Boolean]) }
 //val timestamp_sel: RDD[Long] = withCutEvaluated.select($"timestamp").rdd.map { case x : Row => x(0).asInstanceOf[Long] } 
-//val timestamp1 = timestamp.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: Long => x}))(new Increment, new Combine)
-//val timestamp2 = timestamp_sel.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: Long => x}))(new Increment, new Combine)
 
-//val glyph_one = timestamp1.bokeh(lineColor=Color.Blue)
-//val glyph_two = timestamp2.bokeh(lineColor=Color.Red)
-//val plot_both = plot(glyph_one,glyph_two)
-//save(plot_both,"histogram5.html")
+val timestamp1 = timestamp.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: TimestampWithFilter => x.timestamp}))(new Increment, new Combine)
+val timestamp2 = timestamp.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: TimestampWithFilter => x.timestamp},{x: TimestampWithFilter => x.cutsEvaluated}))(new Increment, new Combine)
+
+val glyph_one = timestamp1.bokeh(lineColor=Color.Blue)
+val glyph_two = timestamp2.bokeh(lineColor=Color.Red)
+val plot_both = plot(glyph_one,glyph_two)
+//add plots decsription
+save(plot_both,"rate_cmp.html")
+
 
 
