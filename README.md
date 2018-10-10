@@ -7,7 +7,7 @@ Commands to setup environment on HN worker node:
 ```
 Command to run spark shell from Elastic_Scattering_Analysis directory with all dependencies and basic configuration:
 ```
-spark-shell --master yarn --packages org.diana-hep:spark-root_2.11:0.1.16,org.diana-hep:histogrammar-sparksql_2.11:1.0.3,org.diana-hep:histogrammar-bokeh_2.11:1.0.3 --conf spark.authenticate.enableSaslEncryption=true --conf spark.authenticate=true --conf spark.executorEnv.LD_LIBRARY_PATH=$LD_LIBRARY_PATH --conf spark.extraListeners= "" --conf spark.executor.memory=20g
+spark-shell --master yarn --packages org.diana-hep:spark-root_2.11:0.1.16,org.diana-hep:histogrammar-sparksql_2.11:1.0.3,org.diana-hep:histogrammar-bokeh_2.11:1.0.3 --conf spark.authenticate.enableSaslEncryption=true --conf spark.authenticate=true --conf spark.executorEnv.LD_LIBRARY_PATH=$LD_LIBRARY_PATH --conf spark.extraListeners= "" --conf spark.executor.memory=20g --conf spark.sql.codegen.wholeStage=false
 ```
 #### Running script in spark-shell:
 Loading all defining files:
