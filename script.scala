@@ -13,7 +13,7 @@ import org.apache.spark.sql.functions.lit
 //*****************************
 
 //val path = "root://eostotem//eos/totem/data/cmstotem/2015/90m/Totem/Ntuple/version2/4496/TotemNTuple_9893.000.ntuple.root"
-val path = "root://eostotem//eos/totem/data/cmstotem/2015/90m/Totem/Ntuple/version2/4495"
+val path = "/net/archive/groups/plggdiamonds/root-spark/data/4495"
 val df = spark.sqlContext.read.root(path)
 
 
@@ -130,13 +130,13 @@ val withKinematics = distilled.withColumn("kinematics",doReconstruction($"L_2_N.
 // cut evaluation (only cuts 1, 2 and 7)
 //----------------
 
-val withCuts = withKinematics.withColumn("cut1", createCut($"kinematics.right.th_x", $"kinematics.left.th_x", lit(- cut(1).a), lit(1.0), lit(cut(1).c), lit(cut(1).si))).withColumn("cut2", createCut($"kinematics.right.th_x", $"kinematics.left.th_x", lit(- cut(2).a), lit(1.0), lit(cut(2).c), lit(cut(2).si))).withColumn("cut7", createCut($"kinematics.right.th_x", $"kinematics.right.vtx_x" - $"kinematics.left.vtx_y", lit(- cut(7).a), lit(1.0), lit(cut(7).c), lit(cut(7).si)))
+val withCuts = withKinematics.withColumn("cut1", createCut($"kinematics.right.th_x", $"kinematics.left.th_x", lit(- cut(1).a), lit(1.0), lit(cut(1).c), lit(cut(1).si))).withColumn("cut2", createCut($"kinematics.right.th_x", $"kinematics.left.th_x", lit(- cut(2).a), lit(1.0), lit(cut(2).c), lit(cut(2).si))).withColumn("cut7", createCut($"kinematics.double.th_x", $"kinematics.right.vtx_x" - $"kinematics.left.vtx_y", lit(- cut(7).a), lit(1.0), lit(cut(7).c), lit(cut(7).si)))
 
 // filtered withCutEvaluated results in a state when 2 loops are required to produce  rate_cmp histo, 
 // if all histograms are defined over one rdd only one is triggered to evaluate them, (filter condidtion might be additional param in Histogram constructor)
 //val withCutEvaluated = withCuts.filter(evaluateCut($"cut1.params.a", $"cut1.cqa", $"cut1.params.b", $"cut1.cqb", $"cut1.params.c", $"cut1.params.si")).filter(evaluateCut($"cut2.params.a", $"cut2.cqa", $"cut2.params.b", $"cut2.cqb", $"cut2.params.c", $"cut2.params.si")).filter(evaluateCut($"cut7.params.a", $"cut7.cqa", $"cut7.params.b", $"cut7.cqb", $"cut7.params.c", $"cut7.params.si"))
 
-val withCutEvaluated = withCuts.withColumn("cutsEvaluated", evaluateCut($"cut1.params.a", $"cut1.cqa", $"cut1.params.b", $"cut1.cqb", $"cut1.params.c", $"cut1.params.si") && evaluateCut($"cut2.params.a", $"cut2.cqa", $"cut2.params.b", $"cut2.cqb", $"cut2.params.c", $"cut2.params.si") && evaluateCut($"cut7.params.a", $"cut7.cqa", $"cut7.params.b", $"cut7.cqb", $"cut7.params.c", $"cut7.params.si"))
+val withCutEvaluated = withCuts.withColumn("cut1Evaluated", evaluateCut($"cut1.params.a", $"cut1.cqa", $"cut1.params.b", $"cut1.cqb", $"cut1.params.c", $"cut1.params.si")).withColumn("cut2Evaluated", evaluateCut($"cut2.params.a", $"cut2.cqa", $"cut2.params.b", $"cut2.cqb", $"cut2.params.c", $"cut2.params.si")).withColumn("cut7Evaluated", evaluateCut($"cut7.params.a", $"cut7.cqa", $"cut7.params.b", $"cut7.cqb", $"cut7.params.c", $"cut7.params.si"))
 
 //withCutEvaluated.select($"timestamp").head(10)
 
@@ -146,19 +146,19 @@ val withCutEvaluated = withCuts.withColumn("cutsEvaluated", evaluateCut($"cut1.p
 
 import io.continuum.bokeh._
 
-case class TimestampWithFilter(timestamp: Long, cutsEvaluated: Boolean)
+case class TimestampWithFilter(timestamp: Long, cut1Evaluated: Boolean, cut2Evaluated: Boolean, cut7Evaluated: Boolean)
 
-val timestamp: RDD[TimestampWithFilter] = withCutEvaluated.select($"timestamp", $"cutsEvaluated").rdd.map { case x : Row => TimestampWithFilter(x(0).asInstanceOf[Long], x(1).asInstanceOf[Boolean]) }
+val timestampRDD: RDD[TimestampWithFilter] = withCutEvaluated.select($"timestamp", $"cut1Evaluated", $"cut2Evaluated", $"cut7Evaluated").rdd.map { case x : Row => TimestampWithFilter(x(0).asInstanceOf[Long], x(1).asInstanceOf[Boolean], x(2).asInstanceOf[Boolean], x(3).asInstanceOf[Boolean]) }
 //val timestamp_sel: RDD[Long] = withCutEvaluated.select($"timestamp").rdd.map { case x : Row => x(0).asInstanceOf[Long] } 
 
-val timestamp1 = timestamp.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: TimestampWithFilter => x.timestamp}))(new Increment, new Combine)
-val timestamp2 = timestamp.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: TimestampWithFilter => x.timestamp},{x: TimestampWithFilter => x.cutsEvaluated}))(new Increment, new Combine)
+val timestamp = timestampRDD.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: TimestampWithFilter => x.timestamp}))(new Increment, new Combine)
+//val timestamp_sel = timestampRDD.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: TimestampWithFilter => x.timestamp},{x: TimestampWithFilter => x.cut1Evaluated && x.cut2Evaluated}))(new Increment, new Combine)
+val timestamp_cut1 = timestampRDD.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: TimestampWithFilter => x.timestamp},{x: TimestampWithFilter => x.cut1Evaluated }))(new Increment, new Combine)
+//val timestamp_cut2 = timestampRDD.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: TimestampWithFilter => x.timestamp},{x: TimestampWithFilter => x.cut2Evaluated }))(new Increment, new Combine)
+//val timestamp_cut7 = timestampRDD.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: TimestampWithFilter => x.timestamp},{x: TimestampWithFilter => x.cut7Evaluated }))(new Increment, new Combine)
+val glyph_one = timestamp.bokeh(lineColor=Color.Blue)
+val glyph_two = timestamp_cut1.bokeh(lineColor=Color.Red)
 
-val glyph_one = timestamp1.bokeh(lineColor=Color.Blue)
-val glyph_two = timestamp2.bokeh(lineColor=Color.Red)
 val plot_both = plot(glyph_one,glyph_two)
 //add plots decsription
 save(plot_both,"rate_cmp.html")
-
-
-
