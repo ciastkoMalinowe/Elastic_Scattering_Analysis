@@ -159,6 +159,9 @@ val timestamp_cut1 = timestampRDD.aggregate(Histogram(timestamp_bins, timestamp_
 val glyph_one = timestamp.bokeh(lineColor=Color.Blue)
 val glyph_two = timestamp_cut1.bokeh(lineColor=Color.Red)
 
-val plot_both = plot(glyph_one,glyph_two)
-//add plots decsription
-save(plot_both,"rate_cmp.html")
+//add legend, axis decsription etc
+val legend = List("timestamp" -> List(glyph_one),"selected timestamp" -> List(glyph_two))
+val plots = plot(glyph_one,glyph_two)
+val leg = new Legend().plot(plots).legends(legend)
+plots.renderers <<= (leg :: _)
+save(plots,"rate_cmp.html")
