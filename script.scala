@@ -13,7 +13,8 @@ import org.apache.spark.sql.functions.lit
 //*****************************
 
 //val path = "root://eostotem//eos/totem/data/cmstotem/2015/90m/Totem/Ntuple/version2/4496/TotemNTuple_9893.000.ntuple.root"
-val path = "/net/archive/groups/plggdiamonds/root-spark/data/4495"
+//val path = "/net/archive/groups/plggdiamonds/root-spark/data/4495"
+val path = "./TotemNTuple_9877.000.ntuple.root"
 val df = spark.sqlContext.read.root(path)
 
 
@@ -28,9 +29,12 @@ val track_rp_names = List("L_1_F", "L_2_N", "L_2_F", "R_1_F", "R_2_N", "R_2_F")
 
 var diagonal_selected = df
 
-for ( (track, name) <- (d45b_56t_tracks zip track_rp_names); sufix <- track_rp_suffixes) diagonal_selected = diagonal_selected.withColumnRenamed(track+suffix, name+suffix)
+case class TrackRP(valid: Boolean, x: Double, y: Double, z: Double)
+val simplify = udf((valid: Boolean, x: Double, y:Double, z:Double) => {TrackRP(valid,x,y,z)})
 
-diagonal_selected.printSchema()
+for ( (track, name) <- (d45b_56t_tracks zip track_rp_names)) diagonal_selected = diagonal_selected.withColumn(name, simplify(track_rp_suffixes.map(x => col(track+x)):_*))
+
+diagonal_selected.select("L_1_F").printSchema()
 
 val columns = List("L_1_F", "L_2_N", "L_2_F", "R_1_F", "R_2_N", "R_2_F", "timestamp")
 
@@ -69,7 +73,11 @@ val withKinematics = distilled.withColumn("kinematics",doReconstruction($"L_2_N.
 
 val withCuts = withKinematics.withColumn("cut1", createCut($"kinematics.right.th_x", $"kinematics.left.th_x", lit(- cut(1).a), lit(1.0), lit(cut(1).c), lit(cut(1).si))).withColumn("cut2", createCut($"kinematics.right.th_x", $"kinematics.left.th_x", lit(- cut(2).a), lit(1.0), lit(cut(2).c), lit(cut(2).si))).withColumn("cut7", createCut($"kinematics.double.th_x", $"kinematics.right.vtx_x" - $"kinematics.left.vtx_y", lit(- cut(7).a), lit(1.0), lit(cut(7).c), lit(cut(7).si)))
 
-val withCutEvaluated = withCuts.withColumn("cut.1", evaluateCut($"cut1.params.a", $"cut1.cqa", $"cut1.params.b", $"cut1.cqb", $"cut1.params.c", $"cut1.params.si")).withColumn("cut.2", evaluateCut($"cut2.params.a", $"cut2.cqa", $"cut2.params.b", $"cut2.cqb", $"cut2.params.c", $"cut2.params.si")).withColumn("cut.7", evaluateCut($"cut7.params.a", $"cut7.cqa", $"cut7.params.b", $"cut7.cqb", $"cut7.params.c", $"cut7.params.si"))
+case class CutEvaluation(c1: Boolean, c2: Boolean, c7: Boolean)
+
+val evaluateCuts = udf((cut1: Boolean, cut2: Boolean, cut7:Boolean) => {CutEvaluation(cut1, cut2, cut7)})
+
+val withCutEvaluated = withCuts.withColumn("cut", evaluateCuts(evaluateCut($"cut1.params.a", $"cut1.cqa", $"cut1.params.b", $"cut1.cqb", $"cut1.params.c", $"cut1.params.si"), evaluateCut($"cut2.params.a", $"cut2.cqa", $"cut2.params.b", $"cut2.cqb", $"cut2.params.c", $"cut2.params.si"), evaluateCut($"cut7.params.a", $"cut7.cqa", $"cut7.params.b", $"cut7.cqb", $"cut7.params.c", $"cut7.params.si")))
 
 
 //---------------------
@@ -80,14 +88,12 @@ import io.continuum.bokeh._
 
 case class HistogramBase(timestamp: Long, cut1Evaluated: Boolean, cut2Evaluated: Boolean, cut7Evaluated: Boolean)
 
-case class TrackRP(x: Double, y: Double, z:Double, valid: Boolean)
-case class CutEvaluation(1: Boolean, 2: Boolean, 7: Boolean)
-case class NtupleSimplified(L_1_F:TrackRP, L_2_N:TrackRP, L_2_F:TrackRP, R_1_F:TrackRP, R_2_N: TrackRP, R_2_F: TrackRP, timestamp: Long, cut: CutEvalation, kinematics: Kinematics)
+case class NtupleSimplified(L_1_F:TrackRP, L_2_N:TrackRP, L_2_F:TrackRP, R_1_F:TrackRP, R_2_N: TrackRP, R_2_F: TrackRP, timestamp: Long, cut: CutEvaluation, kinematics: Kinematics)
 
 val resultRDD: RDD[NtupleSimplified] = withCutEvaluated.select($"L_1_F", $"L_2_N", $"L_2_F", $"R_1_F", $"R_2_N", $"R_2_F", $"timestamp", $"cut", $"kinematics").as[NtupleSimplified].rdd
 
 val timestamp 					= resultRDD.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: NtupleSimplified => x.timestamp}))(new Increment, new Combine)
-val timestamp_sel 				= resultRDD.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: NtupleSimplified => x.timestamp},{x: NtupleSimplified => x.cut.1 }))(new Increment, new Combine)
+val timestamp_sel 				= resultRDD.aggregate(Histogram(timestamp_bins, timestamp_min - 0.5, timestamp_max + 0.5, {x: NtupleSimplified => x.timestamp},{x: NtupleSimplified => x.cut.c1 }))(new Increment, new Combine)
 
 val y_L_1_F_vs_x_L_1_F_nosel 	= resultRDD.aggregate(TwoDimensionallyHistogram(150, -15., 15., {x: NtupleSimplified => x.L_1_F.x}, 300, -30., +30., {x: NtupleSimplified => x.L_1_F.y}))
 val y_L_2_N_vs_x_L_2_N_nosel	= resultRDD.aggregate(TwoDimensionallyHistogram(150, -15., 15., {x: NtupleSimplified => x.L_2_N.x}, 300, -30., +30., {x: NtupleSimplified => x.L_2_N.y}))
