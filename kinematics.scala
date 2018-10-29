@@ -1,7 +1,7 @@
 case class ArmReconstruction(th_x: Double, th_y: Double, vtx_x: Double, vtx_y: Double)
 case class ThetaReconstruction(th: Double, phi: Double)
 case class TReconstruction(x: Double, y: Double, t: Double)
-case class Kinematics(left: ArmReconstruction, right: ArmReconstruction, double: ArmReconstruction, theta: ThetaReconstruction, t: TReconstruction)
+case class Kinematics(leftArm: ArmReconstruction, rightArm: ArmReconstruction, doubleArm: ArmReconstruction, theta: ThetaReconstruction, t: TReconstruction)
 case class Hit(x: Double, y: Double)
 
 val doReconstruction = udf((L_2_N_x: Double, L_2_N_y: Double, L_2_F_x:Double, L_2_F_y: Double, R_2_N_x:Double, R_2_N_y:Double, R_2_F_x:Double, R_2_F_y:Double) => {
